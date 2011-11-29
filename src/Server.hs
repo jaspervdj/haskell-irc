@@ -9,28 +9,35 @@ import Data.Aeson.Parser (json)
 import Data.Attoparsec (parseOnly)
 import Data.ByteString (ByteString)
 import Data.Text (Text)
+import qualified Data.Text as T
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
 import qualified Network.WebSockets as WS
-import Network.SimpleIRC as IRC
+import qualified Network.SimpleIRC as IRC
 
 data ClientEvent
     = Connect ByteString Int ByteString
+    | Join ByteString
     deriving (Show)
 
 instance FromJSON ClientEvent where
     parseJSON (A.Object o) = o .: "type" >>= \typ -> case (typ :: Text) of
         "connect" -> Connect <$> o .: "server" <*> o .: "port" <*> o .: "nick"
+        "join"    -> Join    <$> o .: "channel"
         _         -> mzero
     parseJSON _          = mzero
 
 handleConnect :: WS.TextProtocol p => ClientEvent -> WS.WebSockets p ()
 handleConnect (Connect server port nick) = do
     sink <- WS.getSink
-    mirc <- liftIO $ IRC.connect (config sink) True True 
+    Right mirc <- liftIO $ IRC.connect (config sink) True True 
     forever $ do
-        bs <- WS.receiveData
-        WS.sendTextData (bs :: ByteString)
+        evt <- receiveClientEvent
+        case evt of
+            Join channel -> liftIO $
+                IRC.sendCmd mirc $ IRC.MJoin channel Nothing
+            _            -> error $ "Did not expect" ++ show evt
+        WS.sendTextData $ T.pack $ show evt
   where
     config sink = IRC.defaultConfig
         { IRC.cAddr   = BC.unpack server
@@ -41,6 +48,7 @@ handleConnect (Connect server port nick) = do
 
     event sink = IRC.RawMsg $ \_ msg ->
         WS.sendSink sink $ WS.textData $ IRC.mRaw msg
+handleConnect _ = error "Connect first!"
 
 receiveClientEvent :: WS.TextProtocol p => WS.WebSockets p ClientEvent
 receiveClientEvent = do

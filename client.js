@@ -24,6 +24,15 @@ function connect(server, port, nick) {
             "port": port,
             "nick": nick
         }));
+
+        $('#join-form').submit(function() {
+            var channel = $('#join-channel').val();
+            ws.send(JSON.stringify({
+                "type": "join",
+                "channel": channel
+            }));
+            return false;
+        });
     }
     ws.onerror = function(event) {
         appendMessage(event);
