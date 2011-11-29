@@ -7,11 +7,15 @@ function createWebSocket(path) {
     return new Socket(uri);
 }
 
+function appendMessage(message) {
+    $('#chat').append(message + '\n');
+}
+
 function connect(server, port, nick) {
     var ws = createWebSocket('/chat');
     $('#connect').hide();
     ws.onmessage = function(event) {
-        $('#chat').append(event.data);
+        appendMessage(event.data);
     }
     ws.onopen = function() {
         ws.send(JSON.stringify({
@@ -22,10 +26,10 @@ function connect(server, port, nick) {
         }));
     }
     ws.onerror = function(event) {
-        $('#chat').append(event);
+        appendMessage(event);
     };
     ws.onclose = function() {
-        $('#chat').append('Closed');
+        appendMessage('Closed');
     };
 }
 
