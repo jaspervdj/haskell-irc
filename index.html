@@ -1,0 +1,29 @@
+<!DOCTYPE HTML>
+<html>
+    <head>
+        <title>Haskell IRC Webchat</title>
+        <script type="text/JavaScript"
+            src="http://code.jquery.com/jquery-1.6.3.min.js"></script>
+        <script type="text/JavaScript" src="client.js"></script>
+    </head>
+    <body>
+        <h1>
+            Haskell IRC Webchat
+        </h1>
+        <div id="connect">
+            <form id="connect-form" action="">
+                <label for="server">Server:</label>
+                <input type="text" name="connect-nick" id="connect-server"
+                        value="wina.ugent.be:6666" />
+                <br />
+                <label for="nick">Nick:</label>
+                <input type="text" name="connect-nick" id="connect-nick"
+                        value="jasper" />
+                <br />
+                <input type="submit" value="Connect" />
+            </form>
+        </div>
+        <div id="chat">
+        </div>
+    </body>
+</html>
