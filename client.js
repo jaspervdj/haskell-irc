@@ -11,11 +11,43 @@ function appendMessage(message) {
     $('#chat').append(message + '\n');
 }
 
+function Tab(name) {
+    var tab = this;
+
+    var button = $(document.createElement('div')).text(name);
+    $('#tab-buttons').append(button);
+    this.button = button;
+
+    var panel = $(document.createElement('div'));
+    panel.hide();
+    $('#tab-panels').append(panel);
+    this.panel = panel;
+
+    this.button.click(function() {
+        tab.show();
+    });
+
+    this.show = function() {
+        $('#tab-panels').children('div').hide();
+        panel.show();
+    };
+
+    this.appendMessage = function(message) {
+        var div = $(document.createElement('div'));
+        div.text(message);
+        panel.append(div);
+    };
+}
+
 function makeHandlers() {
+    mainTab = new Tab('main');
+    tabs = {};
+
     return {
         "privmsg": function(event) {
-            appendMessage('[' + event.channel + '] ' +
-                    event.nick + ': ' + event.text);
+            var channel = event.channel;
+            if(!tabs[channel]) tabs[channel] = new Tab(channel);
+            tabs[channel].appendMessage(event.nick + ': ' + event.text);
         }
     };
 }
@@ -27,17 +59,23 @@ function connect(server, port, nick) {
     var handlers = makeHandlers();
 
     ws.onmessage = function(event) {
+        var json;
         try {
             json = JSON.parse(event.data);
+        } catch(err) {
+            json = null;
+        }
+
+        if(json) {
             if(handlers[json.type]) {
                 handlers[json.type](json);
             } else {
                 appendMessage('[No handler] ' + JSON.stringify(json));
             }
-        } catch(err) {
+        } else {
             appendMessage('[No JSON] ' + event.data);
         }
-    }
+    };
 
     ws.onopen = function() {
         ws.send(JSON.stringify({
