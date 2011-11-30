@@ -17,14 +17,14 @@ import qualified Network.SimpleIRC as IRC
 
 data Event
     = Connect ByteString Int ByteString
-    | Join    ByteString
+    | Join    ByteString ByteString
     | Privmsg ByteString ByteString ByteString
     deriving (Show)
 
 instance FromJSON Event where
     parseJSON (A.Object o) = o .: "type" >>= \typ -> case (typ :: Text) of
         "connect" -> Connect <$> o .: "server" <*> o .: "port" <*> o .: "nick"
-        "join"    -> Join    <$> o .: "channel"
+        "join"    -> Join    <$> o .: "channel" <*> o .: "nick"
         "privmsg" -> Privmsg <$> o .: "channel" <*> o .: "nick" <*> o .: "text"
         _         -> mzero
     parseJSON _          = mzero
@@ -32,14 +32,14 @@ instance FromJSON Event where
 instance ToJSON Event where
     toJSON e = obj $ case e of
         Connect s p n -> ["server" .= s, "port" .= p, "nick" .= n]
-        Join    c     -> ["channel" .= c]
+        Join    c n   -> ["channel" .= c, "nick" .= n]
         Privmsg c n t -> ["channel" .= c, "nick" .= n, "text" .= t]
       where
         obj = A.object . ("type" .= eventType e :)
 
 eventType :: Event -> ByteString
 eventType (Connect _ _ _) = "connect"
-eventType (Join _)        = "join"
+eventType (Join _ _)      = "join"
 eventType (Privmsg _ _ _) = "privmsg"
 
 handleConnect :: WS.TextProtocol p => Event -> WS.WebSockets p ()
@@ -50,9 +50,10 @@ handleConnect (Connect server port nick) = do
     forever $ do
         evt <- receiveClientEvent
         case evt of
-            Join channel  -> liftIO $
-                IRC.sendCmd mirc $ IRC.MJoin channel Nothing
-            Privmsg c n t -> liftIO $ do
+            Join c _      -> liftIO $ do
+                IRC.sendCmd mirc $ IRC.MJoin c Nothing
+                sendEvent evt
+            Privmsg c _ t -> liftIO $ do
                 IRC.sendCmd mirc $ IRC.MPrivmsg c t
                 sendEvent evt
             _             ->

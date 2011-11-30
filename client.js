@@ -80,12 +80,19 @@ function TabManager() {
     };
 }
 
-function makeHandlers(tabManager) {
+function makeHandlers(tabManager, nick) {
     return {
         "privmsg": function(event) {
             var channel = event.channel;
             var tab = tabManager.getChannelTab(channel);
             tab.appendMessage(event.nick + ': ' + event.text);
+        },
+        "join": function(event) {
+            /* We joined a channel, open a new tab */
+            if(nick == event.nick) {
+                var tab = tabManager.getChannelTab(event.channel);
+                tabManager.showTab(tab);
+            }
         }
     };
 }
@@ -96,7 +103,7 @@ function connect(server, port, nick) {
     $('#chat').show();
 
     var tabManager = new TabManager();
-    var handlers = makeHandlers(tabManager);
+    var handlers = makeHandlers(tabManager, nick);
     var serverTab = tabManager.getServerTab();
 
     ws.onmessage = function(event) {
@@ -130,7 +137,8 @@ function connect(server, port, nick) {
             var channel = $('#join-channel').val();
             ws.send(JSON.stringify({
                 "type": "join",
-                "channel": channel
+                "channel": channel,
+                "nick": nick
             }));
             return false;
         });
