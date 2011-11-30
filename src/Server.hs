@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 import Control.Monad (forever, mzero)
 import Control.Monad.Trans (liftIO)
-import Control.Applicative ((<$>), (<*>))
+import Control.Applicative (pure, (<$>), (<*>))
 
 import Data.Aeson (FromJSON (..), ToJSON (..), (.:), (.=))
 import qualified Data.Aeson as A
@@ -15,19 +15,34 @@ import qualified Data.ByteString.Char8 as BC
 import qualified Network.WebSockets as WS
 import qualified Network.SimpleIRC as IRC
 
-data ClientEvent
+data Event
     = Connect ByteString Int ByteString
-    | Join ByteString
+    | Join    ByteString
+    | Privmsg ByteString ByteString ByteString
     deriving (Show)
 
-instance FromJSON ClientEvent where
+instance FromJSON Event where
     parseJSON (A.Object o) = o .: "type" >>= \typ -> case (typ :: Text) of
         "connect" -> Connect <$> o .: "server" <*> o .: "port" <*> o .: "nick"
         "join"    -> Join    <$> o .: "channel"
+        "privmsg" -> Privmsg <$> o .: "channel" <*> o .: "nick" <*> o .: "text"
         _         -> mzero
     parseJSON _          = mzero
 
-handleConnect :: WS.TextProtocol p => ClientEvent -> WS.WebSockets p ()
+instance ToJSON Event where
+    toJSON e = obj $ case e of
+        Connect s p n -> ["server" .= s, "port" .= p, "nick" .= n]
+        Join    c     -> ["channel" .= c]
+        Privmsg c n t -> ["channel" .= c, "nick" .= n, "text" .= t]
+      where
+        obj = A.object . ("type" .= eventType e :)
+
+eventType :: Event -> ByteString
+eventType (Connect _ _ _) = "connect"
+eventType (Join _)        = "join"
+eventType (Privmsg _ _ _) = "privmsg"
+
+handleConnect :: WS.TextProtocol p => Event -> WS.WebSockets p ()
 handleConnect (Connect server port nick) = do
     sink <- WS.getSink
     Right mirc <- liftIO $ IRC.connect (config sink) True True 
@@ -43,14 +58,23 @@ handleConnect (Connect server port nick) = do
         { IRC.cAddr   = BC.unpack server
         , IRC.cPort   = port
         , IRC.cNick   = BC.unpack nick
-        , IRC.cEvents = [event sink]
+        , IRC.cEvents = handleServerEvent sink
         }
 
-    event sink = IRC.RawMsg $ \_ msg ->
-        WS.sendSink sink $ WS.textData $ IRC.mRaw msg
 handleConnect _ = error "Connect first!"
 
-receiveClientEvent :: WS.TextProtocol p => WS.WebSockets p ClientEvent
+handleServerEvent :: WS.TextProtocol p => WS.Sink p -> [IRC.IrcEvent]
+handleServerEvent sink =
+    [ IRC.Privmsg $ \_ msg -> maybe (return ()) sendEvent $
+        Privmsg <$> IRC.mChan msg <*> IRC.mNick msg <*> pure (IRC.mMsg msg)
+    , IRC.Notice pipe
+    , IRC.RawMsg pipe
+    ]
+  where
+    pipe _ msg = WS.sendSink sink $ WS.textData $ IRC.mRaw msg
+    sendEvent  = WS.sendSink sink . WS.textData . A.encode
+
+receiveClientEvent :: WS.TextProtocol p => WS.WebSockets p Event
 receiveClientEvent = do
     bs <- WS.receiveData
     case parseOnly json bs of

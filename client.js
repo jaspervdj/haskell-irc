@@ -11,12 +11,34 @@ function appendMessage(message) {
     $('#chat').append(message + '\n');
 }
 
+function makeHandlers() {
+    return {
+        "privmsg": function(event) {
+            appendMessage('[' + event.channel + '] ' +
+                    event.nick + ': ' + event.text);
+        }
+    };
+}
+
 function connect(server, port, nick) {
     var ws = createWebSocket('/chat');
     $('#connect').hide();
+
+    var handlers = makeHandlers();
+
     ws.onmessage = function(event) {
-        appendMessage(event.data);
+        try {
+            json = JSON.parse(event.data);
+            if(handlers[json.type]) {
+                handlers[json.type](json);
+            } else {
+                appendMessage('[No handler] ' + JSON.stringify(json));
+            }
+        } catch(err) {
+            appendMessage('[No JSON] ' + event.data);
+        }
     }
+
     ws.onopen = function() {
         ws.send(JSON.stringify({
             "type": "connect",
