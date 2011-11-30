@@ -11,7 +11,7 @@ function appendMessage(message) {
     $('#chat').append(message + '\n');
 }
 
-function Tab(name) {
+function Tab(tabManager, name) {
     var tab = this;
 
     var button = $(document.createElement('div')).text(name);
@@ -24,11 +24,14 @@ function Tab(name) {
     this.panel = panel;
 
     this.button.click(function() {
-        tab.show();
+        tabManager.showTab(tab);
     });
 
+    this.hide = function() {
+        panel.hide();
+    }
+
     this.show = function() {
-        $('#tab-panels').children('div').hide();
         panel.show();
     };
 
@@ -43,14 +46,37 @@ function Tab(name) {
     };
 }
 
-function makeHandlers() {
-    tabs = {};
+function TabManager() {
+    var tabManager = this;
+    var serverTab = new Tab(tabManager, 'server');
+    var activeTab = serverTab;
 
+    var channelTabs = {};
+    
+    this.showTab = function(tab) {
+        activeTab.hide();
+        tab.show();
+        activeTab = tab;
+    };
+
+    this.getServerTab = function() {
+        return serverTab;
+    };
+
+    this.getChannelTab = function(channel) {
+        if(!channelTabs[channel]) {
+            channelTabs[channel] = new Tab(tabManager, channel);
+        }
+        return channelTabs[channel];
+    };
+}
+
+function makeHandlers(tabManager) {
     return {
         "privmsg": function(event) {
             var channel = event.channel;
-            if(!tabs[channel]) tabs[channel] = new Tab(channel);
-            tabs[channel].appendMessage(event.nick + ': ' + event.text);
+            var tab = tabManager.getChannelTab(channel);
+            tab.appendMessage(event.nick + ': ' + event.text);
         }
     };
 }
@@ -60,8 +86,9 @@ function connect(server, port, nick) {
     $('#connect').hide();
     $('#chat').show();
 
-    var serverTab = new Tab(server);
-    var handlers = makeHandlers();
+    var tabManager = new TabManager();
+    var handlers = makeHandlers(tabManager);
+    var serverTab = tabManager.getServerTab();
 
     ws.onmessage = function(event) {
         var json;
