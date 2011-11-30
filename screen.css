@@ -16,6 +16,15 @@ div#sidebar {
     padding: 6px;
 }
 
+div#tab-names div.names {
+    margin: 10px;
+    background-color: white;
+}
+
+div#tab-names div.names div {
+    display: block;
+}
+
 div#tab-titles div {
     padding: 6px;
     font-weight: bold;
@@ -24,7 +33,7 @@ div#tab-titles div {
 div#tab-panels {
 }
 
-div#tab-panels div.tab {
+div#tab-panels div.panel {
     height: 480px;
     padding: 6px;
     overflow: auto;

@@ -25,6 +25,7 @@ data Event
     | Join    ByteString ByteString
     | Privmsg ByteString ByteString ByteString
     | Topic   ByteString ByteString
+    | Names   ByteString [ByteString]
     deriving (Show)
 
 instance FromJSON Event where
@@ -33,6 +34,7 @@ instance FromJSON Event where
         "join"    -> Join    <$> o .: "channel" <*> o .: "nick"
         "privmsg" -> Privmsg <$> o .: "channel" <*> o .: "nick" <*> o .: "text"
         "topic"   -> Topic   <$> o .: "channel" <*> o .: "text"
+        "names"   -> Names   <$> o .: "channel" <*> o .: "names"
         _         -> mzero
     parseJSON _          = mzero
 
@@ -42,6 +44,7 @@ instance ToJSON Event where
         Join    c n   -> ["channel" .= c, "nick" .= n]
         Privmsg c n t -> ["channel" .= c, "nick" .= n, "text" .= t]
         Topic   c t   -> ["channel" .= c, "text" .= t]
+        Names   c n   -> ["channel" .= c, "names" .= n]
       where
         obj = A.object . ("type" .= eventType e :)
 
@@ -50,6 +53,7 @@ eventType (Connect _ _ _) = "connect"
 eventType (Join _ _)      = "join"
 eventType (Privmsg _ _ _) = "privmsg"
 eventType (Topic _ _)     = "topic"
+eventType (Names _ _)     = "names"
 
 handleConnect :: WS.TextProtocol p => Event -> WS.WebSockets p ()
 handleConnect (Connect server port nick) = do
@@ -75,6 +79,8 @@ handleConnect (Connect server port nick) = do
                 sendServer "PONG" x
             Message _ "332" [_, c, t] ->
                 sendClient $ Topic c t
+            Message _ "353" (_ : "=" : c : args)  ->
+                sendClient $ Names c $ BC.words $ last args
             _                          ->
                 putStrLn $ "Unhandled server event: " ++ show evt
         return ()

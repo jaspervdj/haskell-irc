@@ -14,6 +14,7 @@ function appendMessage(message) {
 function Tab(tabManager, name, channel) {
     var tab = this;
     var active = false;
+    var namesList = [];
 
     var title = $(document.createElement('div')).text(name);
     title.hide();
@@ -22,9 +23,13 @@ function Tab(tabManager, name, channel) {
     var button = $(document.createElement('div')).text(name);
     $('#tab-buttons').append(button);
 
-    var panel = $(document.createElement('div')).addClass('tab');
+    var panel = $(document.createElement('div')).addClass('panel');
     panel.hide();
     $('#tab-panels').append(panel);
+
+    var names = $(document.createElement('div')).addClass('names');
+    names.hide();
+    $('#tab-names').append(names);
 
     button.click(function() {
         tabManager.showTab(tab);
@@ -33,12 +38,14 @@ function Tab(tabManager, name, channel) {
     this.hide = function() {
         panel.hide();
         title.hide();
+        names.hide();
         active = false;
     }
 
     this.show = function() {
         panel.show();
         title.show();
+        names.show();
         active = true;
         button.removeClass('alert');
     };
@@ -56,6 +63,30 @@ function Tab(tabManager, name, channel) {
 
     this.setTitle = function(text) {
         title.text(text);
+    };
+
+    this.refreshNames = function() {
+        names.html('');
+
+        var addName = function(name) {
+            var div = $(document.createElement('div')).text(name);
+            div.click(function() {
+                var nameTab = tabManager.getChannelTab(name);
+                tabManager.showTab(nameTab);
+            });
+            names.append(div);
+        };
+
+        for(var i in namesList) {
+            addName(namesList[i]);
+        }
+    };
+
+    this.addNames = function(names) {
+        for(i in names) {
+            namesList.push(names[i]);
+        }
+        tab.refreshNames();
     };
 }
 
@@ -92,7 +123,12 @@ function makeHandlers(tabManager, nick) {
     return {
         "privmsg": function(event) {
             var channel = event.channel;
-            var tab = tabManager.getChannelTab(channel);
+            var tab;
+            if(event.channel == nick) {
+                tab = tabManager.getChannelTab(event.nick);
+            } else {
+                tab = tabManager.getChannelTab(channel);
+            }
             tab.appendMessage(event.nick + ': ' + event.text);
         },
         "join": function(event) {
@@ -105,6 +141,10 @@ function makeHandlers(tabManager, nick) {
         "topic": function(event) {
             var tab = tabManager.getChannelTab(event.channel);
             tab.setTitle(event.text);
+        },
+        "names": function(event) {
+            var tab = tabManager.getChannelTab(event.channel);
+            tab.addNames(event.names);
         }
     };
 }
