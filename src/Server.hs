@@ -1,19 +1,24 @@
 {-# LANGUAGE OverloadedStrings #-}
+import Data.Char (toUpper)
 import Control.Monad (forever, mzero)
 import Control.Monad.Trans (liftIO)
 import Control.Applicative (pure, (<$>), (<*>))
+import Control.Concurrent (forkIO, threadDelay)
 
 import Data.Aeson (FromJSON (..), ToJSON (..), (.:), (.=))
-import qualified Data.Aeson as A
 import Data.Aeson.Parser (json)
 import Data.Attoparsec (parseOnly)
 import Data.ByteString (ByteString)
 import Data.Text (Text)
-import qualified Data.Text as T
+import qualified Data.Aeson as A
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
-import qualified Network.WebSockets as WS
+import qualified Data.Text as T
 import qualified Network.SimpleIRC as IRC
+import qualified Network.WebSockets as WS
+
+import Irc.Message
+import Irc.Socket
 
 data Event
     = Connect ByteString Int ByteString
@@ -49,28 +54,44 @@ eventType (Topic _ _)     = "topic"
 handleConnect :: WS.TextProtocol p => Event -> WS.WebSockets p ()
 handleConnect (Connect server port nick) = do
     sink <- WS.getSink
-    let sendEvent = WS.sendSink sink . WS.textData . A.encode
-    Right mirc <- liftIO $ IRC.connect (config sink) True True 
+    let sendClient = WS.sendSink sink . WS.textData . A.encode
+
+    irc <- liftIO $ connect server port
+    let sendServer c p = writeMessage irc $ makeMessage c p
+
+    -- Identify
+    _ <- liftIO $ forkIO $ do
+        threadDelay $ 1000 * 1000
+        sendServer "NICK" [nick]
+        sendServer "USER" [BC.map toUpper nick, "*", "*", nick]
+
+    -- Handle events sent by the server
+    _ <- liftIO $ forkIO $ forever $ do
+        evt <- readMessage irc
+        case evt of
+            Message _ "PRIVMSG" [c, t] ->
+                sendClient $ Privmsg c (getNick evt) t
+            Message _ "PING" x ->
+                sendServer "PONG" x
+            Message _ "332" [_, c, t] ->
+                sendClient $ Topic c t
+            _                          ->
+                putStrLn $ "Unhandled server event: " ++ show evt
+        return ()
+
+    -- Handle events sent by the client
     forever $ do
         evt <- receiveClientEvent
         case evt of
             Join c _      -> liftIO $ do
-                IRC.sendCmd mirc $ IRC.MJoin c Nothing
-                sendEvent evt
+                sendServer "JOIN" [c]
+                sendClient evt
             Privmsg c _ t -> liftIO $ do
-                IRC.sendCmd mirc $ IRC.MPrivmsg c t
-                sendEvent evt
-            _             ->
-                error $ "Did not expect" ++ show evt
+                sendServer "PRIVMSG" [c, t]
+                sendClient evt
+            _             -> liftIO $
+                putStrLn $ "Unhandled client event: " ++ show evt
         WS.sendTextData $ T.pack $ show evt
-  where
-    config sink = IRC.defaultConfig
-        { IRC.cAddr   = BC.unpack server
-        , IRC.cPort   = port
-        , IRC.cNick   = BC.unpack nick
-        , IRC.cEvents = handleServerEvent sink
-        }
-
 handleConnect _ = error "Connect first!"
 
 handleServerEvent :: WS.TextProtocol p => WS.Sink p -> [IRC.IrcEvent]
