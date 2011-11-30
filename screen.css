@@ -1,0 +1,32 @@
+html {
+    font-family: monospace;
+    color: #444;
+}
+
+body {
+    margin: 0px;
+}
+
+div#sidebar {
+    float: right;
+    width: 200px;
+    border-left: 1px solid #444;
+    background-color: #aaa;
+    height: 480px;
+    padding: 6px;
+}
+
+div#tab-panels {
+    height: 480px;
+    padding: 6px; /* NEED BE REMOVED */
+}
+
+div#tab-buttons {
+    border-top: 1px solid #444;
+    padding: 6px;
+}
+
+div#tab-buttons div {
+    display: inline;
+    margin-right: 12px;
+}

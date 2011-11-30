@@ -5,11 +5,9 @@
         <script type="text/JavaScript"
             src="http://code.jquery.com/jquery-1.6.3.min.js"></script>
         <script type="text/JavaScript" src="client.js"></script>
+        <link rel="stylesheet" type="text/css" href="screen.css" />
     </head>
     <body>
-        <h1>
-            Haskell IRC Webchat
-        </h1>
         <div id="connect">
             <form id="connect-form" action="">
                 <label for="server">Server:</label>
@@ -23,20 +21,24 @@
                 <input type="submit" value="Connect" />
             </form>
         </div>
-        <div id="controls">
-            <div id="join">
-                <form id="join-form" action="">
-                    <input type="text" name="join-channel" id="join-channel"
-                            value="#testing" />
-                    <input type="submit" value="Join" />
-                </form>
+        <div id="chat" style="display: none">
+            <div id="sidebar">
+                <div id="join">
+                    <form id="join-form" action="">
+                        <input type="text" name="join-channel" id="join-channel"
+                                value="#testing" />
+                        <input type="submit" value="Join" />
+                    </form>
+                </div>
             </div>
-        </div>
-        <pre id="chat">
-        </div>
-        <div id="tab-panels">
-        </div>
-        <div id="tab-buttons">
+            <div id="tab-panels">
+            </div>
+            <div id="tab-buttons">
+            </div>
+            <form id="send-form">
+                <input type="text" name="send-text" id="send-text" /> 
+                <input type="submit" value="Send" />
+            </div>
         </div>
     </body>
 </html>

@@ -37,10 +37,13 @@ function Tab(name) {
         div.text(message);
         panel.append(div);
     };
+
+    this.getChannel = function() {
+        return name;
+    };
 }
 
 function makeHandlers() {
-    mainTab = new Tab('main');
     tabs = {};
 
     return {
@@ -55,7 +58,9 @@ function makeHandlers() {
 function connect(server, port, nick) {
     var ws = createWebSocket('/chat');
     $('#connect').hide();
+    $('#chat').show();
 
+    var serverTab = new Tab(server);
     var handlers = makeHandlers();
 
     ws.onmessage = function(event) {
@@ -70,10 +75,10 @@ function connect(server, port, nick) {
             if(handlers[json.type]) {
                 handlers[json.type](json);
             } else {
-                appendMessage('[No handler] ' + JSON.stringify(json));
+                serverTab.appendMessage('[No handler] ' + JSON.stringify(json));
             }
         } else {
-            appendMessage('[No JSON] ' + event.data);
+            serverTab.appendMessage('[No JSON] ' + event.data);
         }
     };
 
