@@ -10,7 +10,7 @@ createWebSocket = (path) ->
 
 class Tab
   constructor: (@tabManager, @name, @channel) ->
-    @tab = this
+    @tab = tab = this
     @active = false
     @namesList = []
 
@@ -30,7 +30,7 @@ class Tab
     $('#tab-names').append(@names)
 
     @button.click(() ->
-      tabManager.showTab(@tab)
+      tabManager.showTab(tab)
     )
 
   hide: () ->
@@ -59,7 +59,7 @@ class Tab
     @title.text(text)
 
   refreshNames: () ->
-    names.html('')
+    @names.html('')
 
     for name in @namesList
       do (name) ->
@@ -93,9 +93,9 @@ class TabManager
     @activeTab
 
   getChannelTab: (channel) ->
-    unless channelTabs[channel]
-      channelTabs[channel] = new Tab(@tabManager, channel, channel)
-    channelTabs[channel]
+    unless @channelTabs[channel]
+      @channelTabs[channel] = new Tab(@tabManager, channel, channel)
+    @channelTabs[channel]
 
 makeHandlers = (tabManager, nick) ->
   privmsg: (event) ->
