@@ -15,26 +15,30 @@ function Tab(tabManager, name, channel) {
     var tab = this;
     var active = false;
 
+    var title = $(document.createElement('div')).text(name);
+    title.hide();
+    $('#tab-titles').append(title);
+
     var button = $(document.createElement('div')).text(name);
     $('#tab-buttons').append(button);
-    this.button = button;
 
     var panel = $(document.createElement('div')).addClass('tab');
     panel.hide();
     $('#tab-panels').append(panel);
-    this.panel = panel;
 
-    this.button.click(function() {
+    button.click(function() {
         tabManager.showTab(tab);
     });
 
     this.hide = function() {
         panel.hide();
+        title.hide();
         active = false;
     }
 
     this.show = function() {
         panel.show();
+        title.show();
         active = true;
         button.removeClass('alert');
     };
@@ -48,6 +52,10 @@ function Tab(tabManager, name, channel) {
 
     this.getChannel = function() {
         return channel;
+    };
+
+    this.setTitle = function(text) {
+        title.text(text);
     };
 }
 
@@ -93,6 +101,10 @@ function makeHandlers(tabManager, nick) {
                 var tab = tabManager.getChannelTab(event.channel);
                 tabManager.showTab(tab);
             }
+        },
+        "topic": function(event) {
+            var tab = tabManager.getChannelTab(event.channel);
+            tab.setTitle(event.text);
         }
     };
 }

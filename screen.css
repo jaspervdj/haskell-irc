@@ -16,6 +16,11 @@ div#sidebar {
     padding: 6px;
 }
 
+div#tab-titles div {
+    padding: 6px;
+    font-weight: bold;
+}
+
 div#tab-panels {
 }
 

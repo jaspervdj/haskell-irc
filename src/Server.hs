@@ -19,21 +19,24 @@ data Event
     = Connect ByteString Int ByteString
     | Join    ByteString ByteString
     | Privmsg ByteString ByteString ByteString
+    | Topic   ByteString ByteString
     deriving (Show)
 
 instance FromJSON Event where
     parseJSON (A.Object o) = o .: "type" >>= \typ -> case (typ :: Text) of
-        "connect" -> Connect <$> o .: "server" <*> o .: "port" <*> o .: "nick"
+        "connect" -> Connect <$> o .: "server"  <*> o .: "port" <*> o .: "nick"
         "join"    -> Join    <$> o .: "channel" <*> o .: "nick"
         "privmsg" -> Privmsg <$> o .: "channel" <*> o .: "nick" <*> o .: "text"
+        "topic"   -> Topic   <$> o .: "channel" <*> o .: "text"
         _         -> mzero
     parseJSON _          = mzero
 
 instance ToJSON Event where
     toJSON e = obj $ case e of
-        Connect s p n -> ["server" .= s, "port" .= p, "nick" .= n]
+        Connect s p n -> ["server" .= s,  "port" .= p, "nick" .= n]
         Join    c n   -> ["channel" .= c, "nick" .= n]
         Privmsg c n t -> ["channel" .= c, "nick" .= n, "text" .= t]
+        Topic   c t   -> ["channel" .= c, "text" .= t]
       where
         obj = A.object . ("type" .= eventType e :)
 
@@ -41,6 +44,7 @@ eventType :: Event -> ByteString
 eventType (Connect _ _ _) = "connect"
 eventType (Join _ _)      = "join"
 eventType (Privmsg _ _ _) = "privmsg"
+eventType (Topic _ _)     = "topic"
 
 handleConnect :: WS.TextProtocol p => Event -> WS.WebSockets p ()
 handleConnect (Connect server port nick) = do
@@ -73,6 +77,11 @@ handleServerEvent :: WS.TextProtocol p => WS.Sink p -> [IRC.IrcEvent]
 handleServerEvent sink =
     [ IRC.Privmsg $ \_ msg -> maybe (return ()) sendEvent $
         Privmsg <$> IRC.mOrigin msg <*> IRC.mNick msg <*> pure (IRC.mMsg msg)
+    , IRC.Numeric $ \_ msg -> (print msg) >> case IRC.mCode msg of
+        -- Topic
+        "332" -> maybe (return ()) sendEvent $
+            Topic <$> IRC.mChan msg <*> pure (IRC.mMsg msg)
+        _     -> return ()
     , IRC.Notice pipe
     , IRC.RawMsg pipe
     ]
