@@ -45,13 +45,18 @@ eventType (Privmsg _ _ _) = "privmsg"
 handleConnect :: WS.TextProtocol p => Event -> WS.WebSockets p ()
 handleConnect (Connect server port nick) = do
     sink <- WS.getSink
+    let sendEvent = WS.sendSink sink . WS.textData . A.encode
     Right mirc <- liftIO $ IRC.connect (config sink) True True 
     forever $ do
         evt <- receiveClientEvent
         case evt of
-            Join channel -> liftIO $
+            Join channel  -> liftIO $
                 IRC.sendCmd mirc $ IRC.MJoin channel Nothing
-            _            -> error $ "Did not expect" ++ show evt
+            Privmsg c n t -> liftIO $ do
+                IRC.sendCmd mirc $ IRC.MPrivmsg c t
+                sendEvent evt
+            _             ->
+                error $ "Did not expect" ++ show evt
         WS.sendTextData $ T.pack $ show evt
   where
     config sink = IRC.defaultConfig

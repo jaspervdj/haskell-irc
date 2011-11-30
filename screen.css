@@ -30,3 +30,11 @@ div#tab-buttons div {
     display: inline;
     margin-right: 12px;
 }
+
+div#tab-buttons div.alert {
+    color: red;
+}
+
+form#send-form {
+    padding: 6px;
+}

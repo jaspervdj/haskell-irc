@@ -11,8 +11,9 @@ function appendMessage(message) {
     $('#chat').append(message + '\n');
 }
 
-function Tab(tabManager, name) {
+function Tab(tabManager, name, channel) {
     var tab = this;
+    var active = false;
 
     var button = $(document.createElement('div')).text(name);
     $('#tab-buttons').append(button);
@@ -29,20 +30,24 @@ function Tab(tabManager, name) {
 
     this.hide = function() {
         panel.hide();
+        active = false;
     }
 
     this.show = function() {
         panel.show();
+        active = true;
+        button.removeClass('alert');
     };
 
     this.appendMessage = function(message) {
         var div = $(document.createElement('div'));
         div.text(message);
         panel.append(div);
+        if(!active) button.addClass('alert');
     };
 
     this.getChannel = function() {
-        return name;
+        return channel;
     };
 }
 
@@ -63,9 +68,13 @@ function TabManager() {
         return serverTab;
     };
 
+    this.getActiveTab = function() {
+        return activeTab;
+    };
+
     this.getChannelTab = function(channel) {
         if(!channelTabs[channel]) {
-            channelTabs[channel] = new Tab(tabManager, channel);
+            channelTabs[channel] = new Tab(tabManager, channel, channel);
         }
         return channelTabs[channel];
     };
@@ -125,10 +134,27 @@ function connect(server, port, nick) {
             }));
             return false;
         });
-    }
+
+        $('#send-form').submit(function() {
+            var channel = tabManager.getActiveTab().getChannel();
+            var text = $('#send-text').val();
+            if(channel) {
+                ws.send(JSON.stringify({
+                    "type": "privmsg",
+                    "channel": channel,
+                    "nick": nick,
+                    "text": text
+                }));
+                $('#send-text').val('');
+            }
+            return false;
+        });
+    };
+
     ws.onerror = function(event) {
         appendMessage(event);
     };
+
     ws.onclose = function() {
         appendMessage('Closed');
     };
