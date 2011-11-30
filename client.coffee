@@ -30,7 +30,7 @@ class Tab
     $('#tab-names').append(@names)
 
     @button.click(() ->
-        tabManager.showTab(tab)
+      tabManager.showTab(@tab)
     )
 
   hide: () ->
@@ -77,8 +77,8 @@ class Tab
 class TabManager
   constructor: () ->
     @tabManager = this
-    @serverTab = new Tab(tabManager, 'server')
-    @activeTab = serverTab
+    @serverTab = new Tab(@tabManager, 'server')
+    @activeTab = @serverTab
     @channelTabs = {}
     
   showTab: (tab) ->
@@ -94,7 +94,7 @@ class TabManager
 
   getChannelTab: (channel) ->
     unless channelTabs[channel]
-      channelTabs[channel] = new Tab(tabManager, channel, channel)
+      channelTabs[channel] = new Tab(@tabManager, channel, channel)
     channelTabs[channel]
 
 makeHandlers = (tabManager, nick) ->
