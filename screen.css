@@ -17,8 +17,12 @@ div#sidebar {
 }
 
 div#tab-panels {
+}
+
+div#tab-panels div.tab {
     height: 480px;
-    padding: 6px; /* NEED BE REMOVED */
+    padding: 6px;
+    overflow: auto;
 }
 
 div#tab-buttons {

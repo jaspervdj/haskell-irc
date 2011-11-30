@@ -19,7 +19,7 @@ function Tab(tabManager, name, channel) {
     $('#tab-buttons').append(button);
     this.button = button;
 
-    var panel = $(document.createElement('div'));
+    var panel = $(document.createElement('div')).addClass('tab');
     panel.hide();
     $('#tab-panels').append(panel);
     this.panel = panel;
