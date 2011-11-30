@@ -71,7 +71,7 @@ handleConnect _ = error "Connect first!"
 handleServerEvent :: WS.TextProtocol p => WS.Sink p -> [IRC.IrcEvent]
 handleServerEvent sink =
     [ IRC.Privmsg $ \_ msg -> maybe (return ()) sendEvent $
-        Privmsg <$> IRC.mChan msg <*> IRC.mNick msg <*> pure (IRC.mMsg msg)
+        Privmsg <$> IRC.mOrigin msg <*> IRC.mNick msg <*> pure (IRC.mMsg msg)
     , IRC.Notice pipe
     , IRC.RawMsg pipe
     ]
