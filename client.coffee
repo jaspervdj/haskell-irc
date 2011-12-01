@@ -162,9 +162,12 @@ connect = (server, port, nick) ->
   ws.onopen = () ->
     ws.send(JSON.stringify({
       "type": "connect",
-      "server": server,
-      "port": port,
-      "nick": nick
+      "user": {
+        "server": server,
+        "port": port,
+        "nick": nick,
+        "password": "herp"
+      }
     }))
 
     $('#join-form').submit(() ->

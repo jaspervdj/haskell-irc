@@ -22,10 +22,11 @@ import qualified Network.WebSockets as WS
 import Irc.Message
 import Irc.Message.Encode
 import Irc.Socket
+import Session
 
 data Event
     = Log     ByteString
-    | Connect ByteString Int ByteString
+    | Connect User
     | Join    ByteString ByteString
     | Privmsg ByteString ByteString ByteString
     | Topic   ByteString ByteString
@@ -36,7 +37,7 @@ data Event
 instance FromJSON Event where
     parseJSON (A.Object o) = o .: "type" >>= \typ -> case (typ :: Text) of
         "log"     -> Log     <$> o .: "text"
-        "connect" -> Connect <$> o .: "server"  <*> o .: "port" <*> o .: "nick"
+        "connect" -> Connect <$> o .: "user"
         "join"    -> Join    <$> o .: "channel" <*> o .: "nick"
         "privmsg" -> Privmsg <$> o .: "channel" <*> o .: "nick" <*> o .: "text"
         "topic"   -> Topic   <$> o .: "channel" <*> o .: "text"
@@ -48,7 +49,7 @@ instance FromJSON Event where
 instance ToJSON Event where
     toJSON e = obj $ case e of
         Log     t     -> ["text" .= t]
-        Connect s p n -> ["server" .= s,  "port" .= p, "nick" .= n]
+        Connect u     -> ["user" .= u]
         Join    c n   -> ["channel" .= c, "nick" .= n]
         Privmsg c n t -> ["channel" .= c, "nick" .= n, "text" .= t]
         Topic   c t   -> ["channel" .= c, "text" .= t]
@@ -59,7 +60,7 @@ instance ToJSON Event where
 
 eventType :: Event -> ByteString
 eventType (Log _)         = "log"
-eventType (Connect _ _ _) = "connect"
+eventType (Connect _)     = "connect"
 eventType (Join _ _)      = "join"
 eventType (Privmsg _ _ _) = "privmsg"
 eventType (Topic _ _)     = "topic"
@@ -89,19 +90,20 @@ addTime (A.Object o) = do
 addTime x            = return x
 
 handleConnect :: WS.TextProtocol p => Event -> WS.WebSockets p ()
-handleConnect (Connect server port nick) = do
+handleConnect (Connect user) = do
     sink <- WS.getSink
     let sendClient e = do
             withTime <- addTime $ toJSON e
             WS.sendSink sink $ WS.textData $ A.encode withTime
 
-    irc <- liftIO $ connect server port
-    let sendServer c p = writeMessage irc $ makeMessage c p
+    irc <- liftIO $ connect (userServer user) (userPort user)
+    let nick = userNick user
+        sendServer c p = writeMessage irc $ makeMessage c p
 
     -- Identify
     _ <- liftIO $ forkIO $ do
         threadDelay $ 1000 * 1000
-        sendServer "NICK" [nick]
+        sendServer "NICK" [userNick user]
         sendServer "USER" [BC.map toUpper nick, "*", "*", nick]
 
     -- Handle events sent by the server
