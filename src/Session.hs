@@ -3,10 +3,17 @@ module Session
     ( User (..)
     , ClientState (..)
     , Session (..)
+    , SessionStore
+    , newSessionStore
+    , getSession
+    , putSession
     ) where
 
 import Control.Applicative ((<$>), (<*>))
+import Control.Concurrent.MVar (MVar, modifyMVar_, newMVar, readMVar)
 import Control.Monad (mzero)
+import Data.Map (Map)
+import qualified Data.Map as M
 
 import Data.Aeson (FromJSON (..), ToJSON (..), (.:), (.=))
 import Data.ByteString (ByteString)
@@ -20,7 +27,7 @@ data User = User
     , userPort     :: Int
     , userNick     :: ByteString
     , userPassword :: ByteString
-    } deriving (Eq, Show)
+    } deriving (Eq, Ord, Show)
 
 instance FromJSON User where
     parseJSON (A.Object o) = User <$>
@@ -40,3 +47,14 @@ data Session = Session
     , sessionServer :: IrcSocket
     , sessionClient :: ClientState
     }
+
+newtype SessionStore = SessionStore (MVar (Map User (MVar Session)))
+
+newSessionStore :: IO SessionStore
+newSessionStore = SessionStore <$> newMVar M.empty
+
+getSession :: User -> SessionStore -> IO (Maybe (MVar Session))
+getSession u (SessionStore m) = M.lookup u <$> readMVar m
+
+putSession :: User -> MVar Session -> SessionStore -> IO ()
+putSession u s (SessionStore m) = modifyMVar_ m $ return . M.insert u s
