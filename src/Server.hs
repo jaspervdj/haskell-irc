@@ -25,7 +25,7 @@ data Event
     | Join    ByteString ByteString
     | Privmsg ByteString ByteString ByteString
     | Topic   ByteString ByteString
-    | Names   ByteString [ByteString]
+    | Names   ByteString [Name]
     deriving (Show)
 
 instance FromJSON Event where
@@ -55,6 +55,21 @@ eventType (Privmsg _ _ _) = "privmsg"
 eventType (Topic _ _)     = "topic"
 eventType (Names _ _)     = "names"
 
+data Name = Name ByteString ByteString
+    deriving (Show)
+
+instance FromJSON Name where
+    parseJSON (A.Object o) = Name <$> o .: "prefix" <*> o .: "nick"
+    parseJSON _            = mzero
+
+instance ToJSON Name where
+    toJSON (Name p n) = A.object ["prefix" .= p, "nick" .= n]
+
+parseName :: ByteString -> Name
+parseName bs = case BC.uncons bs of
+    Just ('@', n) -> Name "@" n
+    _             -> Name "" bs
+
 handleConnect :: WS.TextProtocol p => Event -> WS.WebSockets p ()
 handleConnect (Connect server port nick) = do
     sink <- WS.getSink
@@ -80,7 +95,7 @@ handleConnect (Connect server port nick) = do
             Message _ "332" [_, c, t] ->
                 sendClient $ Topic c t
             Message _ "353" (_ : "=" : c : args)  ->
-                sendClient $ Names c $ BC.words $ last args
+                sendClient $ Names c $ map parseName $ BC.words $ last args
             _                          ->
                 putStrLn $ "Unhandled server event: " ++ show evt
         return ()

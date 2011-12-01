@@ -64,9 +64,9 @@ class Tab
 
     for name in @namesList
       do (name) ->
-        div = $(document.createElement('div')).text(name)
+        div = $(document.createElement('div')).text(name.prefix + name.nick)
         div.click(() ->
-          nameTab = tab.tabManager.getChannelTab(name)
+          nameTab = tab.tabManager.getChannelTab(name.nick)
           tab.tabManager.showTab(nameTab)
         )
         tab.names.append(div)
