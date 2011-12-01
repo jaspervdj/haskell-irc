@@ -4,15 +4,18 @@ import Control.Monad (forever, mzero)
 import Control.Monad.Trans (liftIO)
 import Control.Applicative (pure, (<$>), (<*>))
 import Control.Concurrent (forkIO, threadDelay)
+import System.Locale (defaultTimeLocale)
 
 import Data.Aeson (FromJSON (..), ToJSON (..), (.:), (.=))
 import Data.Aeson.Parser (json)
 import Data.Attoparsec (parseOnly)
 import Data.ByteString (ByteString)
 import Data.Text (Text)
+import Data.Time (formatTime, getCurrentTime)
 import qualified Data.Aeson as A
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
+import qualified Data.Map as M
 import qualified Data.Text as T
 import qualified Network.WebSockets as WS
 
@@ -74,10 +77,19 @@ parseName bs = case BC.uncons bs of
     Just ('@', n) -> Name "@" n
     _             -> Name "" bs
 
+addTime :: A.Value -> IO A.Value
+addTime (A.Object o) = do
+    str <- formatTime defaultTimeLocale "%s" <$> getCurrentTime
+    let time = read str :: Integer
+    return $ A.Object $ M.insert "time" (A.Number $ fromIntegral time) o
+addTime x            = return x
+
 handleConnect :: WS.TextProtocol p => Event -> WS.WebSockets p ()
 handleConnect (Connect server port nick) = do
     sink <- WS.getSink
-    let sendClient = WS.sendSink sink . WS.textData . A.encode
+    let sendClient e = do
+            withTime <- addTime $ toJSON e
+            WS.sendSink sink $ WS.textData $ A.encode withTime
 
     irc <- liftIO $ connect server port
     let sendServer c p = writeMessage irc $ makeMessage c p

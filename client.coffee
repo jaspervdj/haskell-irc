@@ -46,9 +46,14 @@ class Tab
     @active = true
     @button.removeClass('alert')
 
-  appendMessage: (message) ->
+  appendMessage: (message, time) ->
+    if time
+      date = new Date(time * 1000)
+      time = "[#{date.getHours()}:#{date.getMinutes()}] "
+    else
+      time = ''
     div = $(document.createElement('div'))
-    div.text(message)
+    div.text("#{time}#{message}")
     @panel.append(div)
     @button.addClass('alert') if(!@active)
 
@@ -101,7 +106,7 @@ class TabManager
 makeHandlers = (tabManager, nick) ->
   log: (event) ->
     tab = tabManager.getServerTab()
-    tab.appendMessage(event.text)
+    tab.appendMessage(event.text, event.time)
 
   privmsg: (event) ->
     channel = event.channel
