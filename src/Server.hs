@@ -4,6 +4,7 @@ import Control.Monad (forever, mzero)
 import Control.Monad.Trans (liftIO)
 import Control.Applicative (pure, (<$>), (<*>))
 import Control.Concurrent (forkIO, threadDelay)
+import Control.Concurrent.MVar (MVar, modifyMVar_, newMVar, readMVar)
 import System.Locale (defaultTimeLocale)
 
 import Data.Aeson (FromJSON (..), ToJSON (..), (.:), (.=))
@@ -19,125 +20,91 @@ import qualified Data.Map as M
 import qualified Data.Text as T
 import qualified Network.WebSockets as WS
 
+import Event
 import Irc.Message
 import Irc.Message.Encode
 import Irc.Socket
 import Session
 
-data Event
-    = Log     ByteString
-    | Connect User
-    | Join    ByteString ByteString
-    | Privmsg ByteString ByteString ByteString
-    | Topic   ByteString ByteString
-    | Names   ByteString [Name]
-    | Ready
-    deriving (Show)
+-- | Handle events sent by the server
+handleServer :: MVar Session -> IO ()
+handleServer mvar = forever $ do
+    server <- sessionServer <$> readMVar mvar
+    event  <- readMessage server
+    case event of
+        Message _ "PRIVMSG" [c, t] ->
+            sendClient $ Privmsg c (getNick event) t
+        Message _ "PING" x ->
+            sendServer "PONG" x
+        Message _ "332" [_, c, t] ->
+            sendClient $ Topic c t
+        Message _ "353" (_ : "=" : c : args)  ->
+            sendClient $ Names c $ map parseName $ BC.words $ last args
+        Message _ "376" _ ->
+            sendClient Ready
+        msg -> do
+            sendClient $ Log $ encode msg
+            putStrLn $ "Unhandled server event: " ++ show event
+  where
+    sendClient   = sendClientEvent mvar
+    sendServer c = sendServerMessage mvar . makeMessage c
 
-instance FromJSON Event where
-    parseJSON (A.Object o) = o .: "type" >>= \typ -> case (typ :: Text) of
-        "log"     -> Log     <$> o .: "text"
-        "connect" -> Connect <$> o .: "user"
-        "join"    -> Join    <$> o .: "channel" <*> o .: "nick"
-        "privmsg" -> Privmsg <$> o .: "channel" <*> o .: "nick" <*> o .: "text"
-        "topic"   -> Topic   <$> o .: "channel" <*> o .: "text"
-        "names"   -> Names   <$> o .: "channel" <*> o .: "names"
-        "ready"   -> pure Ready
-        _         -> mzero
-    parseJSON _          = mzero
+    -- Handle events sent by the client
+handleClient :: WS.TextProtocol p => MVar Session -> WS.WebSockets p ()
+handleClient mvar = forever $ do
+    liftIO $ print "Reading from client..."
+    evt <- receiveClientEvent
+    liftIO $ print evt
+    case evt of
+        Join c _      -> liftIO $ do
+            sendServer "JOIN" [c]
+            sendClient evt
+        Privmsg c _ t -> liftIO $ do
+            sendServer "PRIVMSG" [c, t]
+            sendClient evt
+        _             -> liftIO $
+            putStrLn $ "Unhandled client event: " ++ show evt
+  where
+    sendClient   = sendClientEvent mvar
+    sendServer c = sendServerMessage mvar . makeMessage c
 
-instance ToJSON Event where
-    toJSON e = obj $ case e of
-        Log     t     -> ["text" .= t]
-        Connect u     -> ["user" .= u]
-        Join    c n   -> ["channel" .= c, "nick" .= n]
-        Privmsg c n t -> ["channel" .= c, "nick" .= n, "text" .= t]
-        Topic   c t   -> ["channel" .= c, "text" .= t]
-        Names   c n   -> ["channel" .= c, "names" .= n]
-        Ready         -> []
-      where
-        obj = A.object . ("type" .= eventType e :)
+sendClientEvent :: MVar Session -> Event -> IO ()
+sendClientEvent mvar event = modifyMVar_ mvar $ \session -> do
+    bs <- A.encode <$> addTime (toJSON event)
+    case sessionClient session of
+        ClientDisconnected bss -> return $
+            session {sessionClient = ClientDisconnected (bs : bss)}
+        ClientConnected sender -> do
+            sender bs
+            return session
 
-eventType :: Event -> ByteString
-eventType (Log _)         = "log"
-eventType (Connect _)     = "connect"
-eventType (Join _ _)      = "join"
-eventType (Privmsg _ _ _) = "privmsg"
-eventType (Topic _ _)     = "topic"
-eventType (Names _ _)     = "names"
-eventType Ready           = "ready"
-
-data Name = Name ByteString ByteString
-    deriving (Show)
-
-instance FromJSON Name where
-    parseJSON (A.Object o) = Name <$> o .: "prefix" <*> o .: "nick"
-    parseJSON _            = mzero
-
-instance ToJSON Name where
-    toJSON (Name p n) = A.object ["prefix" .= p, "nick" .= n]
-
-parseName :: ByteString -> Name
-parseName bs = case BC.uncons bs of
-    Just ('@', n) -> Name "@" n
-    _             -> Name "" bs
-
-addTime :: A.Value -> IO A.Value
-addTime (A.Object o) = do
-    str <- formatTime defaultTimeLocale "%s" <$> getCurrentTime
-    let time = read str :: Integer
-    return $ A.Object $ M.insert "time" (A.Number $ fromIntegral time) o
-addTime x            = return x
+sendServerMessage :: MVar Session -> Message -> IO ()
+sendServerMessage mvar message = readMVar mvar >>= \session ->
+    writeMessage (sessionServer session) message
 
 handleConnect :: WS.TextProtocol p => Event -> WS.WebSockets p ()
 handleConnect (Connect user) = do
     sink <- WS.getSink
-    let sendClient e = do
-            withTime <- addTime $ toJSON e
-            WS.sendSink sink $ WS.textData $ A.encode withTime
+    irc  <- liftIO $ connect (userServer user) (userPort user)
 
-    irc <- liftIO $ connect (userServer user) (userPort user)
+    let sender  = WS.sendSink sink . WS.textData
+        client  = ClientConnected sender
+        session = Session user irc client
+
+    mvar <- liftIO $ newMVar session
+
     let nick = userNick user
         sendServer c p = writeMessage irc $ makeMessage c p
 
     -- Identify
     _ <- liftIO $ forkIO $ do
         threadDelay $ 1000 * 1000
-        sendServer "NICK" [userNick user]
-        sendServer "USER" [BC.map toUpper nick, "*", "*", nick]
+        sendServerMessage mvar $ makeMessage "NICK" [userNick user]
+        sendServerMessage mvar $ makeMessage "USER"
+            [BC.map toUpper nick, "*", "*", nick]
 
-    -- Handle events sent by the server
-    _ <- liftIO $ forkIO $ forever $ do
-        evt <- readMessage irc
-        case evt of
-            Message _ "PRIVMSG" [c, t] ->
-                sendClient $ Privmsg c (getNick evt) t
-            Message _ "PING" x ->
-                sendServer "PONG" x
-            Message _ "332" [_, c, t] ->
-                sendClient $ Topic c t
-            Message _ "353" (_ : "=" : c : args)  ->
-                sendClient $ Names c $ map parseName $ BC.words $ last args
-            Message _ "376" _ ->
-                sendClient Ready
-            msg -> do
-                sendClient $ Log $ encode msg
-                putStrLn $ "Unhandled server event: " ++ show evt
-        return ()
-
-    -- Handle events sent by the client
-    forever $ do
-        evt <- receiveClientEvent
-        case evt of
-            Join c _      -> liftIO $ do
-                sendServer "JOIN" [c]
-                sendClient evt
-            Privmsg c _ t -> liftIO $ do
-                sendServer "PRIVMSG" [c, t]
-                sendClient evt
-            _             -> liftIO $
-                putStrLn $ "Unhandled client event: " ++ show evt
-        WS.sendTextData $ T.pack $ show evt
+    _ <- liftIO $ forkIO $ handleServer mvar
+    handleClient mvar
 handleConnect _ = error "Connect first!"
 
 receiveClientEvent :: WS.TextProtocol p => WS.WebSockets p Event
