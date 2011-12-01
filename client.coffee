@@ -99,6 +99,10 @@ class TabManager
     @channelTabs[channel]
 
 makeHandlers = (tabManager, nick) ->
+  log: (event) ->
+    tab = tabManager.getServerTab()
+    tab.appendMessage(event.text)
+
   privmsg: (event) ->
     channel = event.channel
     tab =
@@ -130,6 +134,7 @@ connect = (server, port, nick) ->
   tabManager = new TabManager()
   handlers = makeHandlers(tabManager, nick)
   serverTab = tabManager.getServerTab()
+  tabManager.showTab(serverTab)
 
   ws.onmessage = (event) ->
     json = null

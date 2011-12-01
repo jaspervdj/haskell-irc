@@ -14,14 +14,15 @@ import qualified Data.Aeson as A
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
 import qualified Data.Text as T
-import qualified Network.SimpleIRC as IRC
 import qualified Network.WebSockets as WS
 
 import Irc.Message
+import Irc.Message.Encode
 import Irc.Socket
 
 data Event
-    = Connect ByteString Int ByteString
+    = Log     ByteString
+    | Connect ByteString Int ByteString
     | Join    ByteString ByteString
     | Privmsg ByteString ByteString ByteString
     | Topic   ByteString ByteString
@@ -30,6 +31,7 @@ data Event
 
 instance FromJSON Event where
     parseJSON (A.Object o) = o .: "type" >>= \typ -> case (typ :: Text) of
+        "log"     -> Log     <$> o .: "text"
         "connect" -> Connect <$> o .: "server"  <*> o .: "port" <*> o .: "nick"
         "join"    -> Join    <$> o .: "channel" <*> o .: "nick"
         "privmsg" -> Privmsg <$> o .: "channel" <*> o .: "nick" <*> o .: "text"
@@ -40,6 +42,7 @@ instance FromJSON Event where
 
 instance ToJSON Event where
     toJSON e = obj $ case e of
+        Log     t     -> ["text" .= t]
         Connect s p n -> ["server" .= s,  "port" .= p, "nick" .= n]
         Join    c n   -> ["channel" .= c, "nick" .= n]
         Privmsg c n t -> ["channel" .= c, "nick" .= n, "text" .= t]
@@ -49,6 +52,7 @@ instance ToJSON Event where
         obj = A.object . ("type" .= eventType e :)
 
 eventType :: Event -> ByteString
+eventType (Log _)         = "log"
 eventType (Connect _ _ _) = "connect"
 eventType (Join _ _)      = "join"
 eventType (Privmsg _ _ _) = "privmsg"
@@ -96,7 +100,8 @@ handleConnect (Connect server port nick) = do
                 sendClient $ Topic c t
             Message _ "353" (_ : "=" : c : args)  ->
                 sendClient $ Names c $ map parseName $ BC.words $ last args
-            _                          ->
+            msg -> do
+                sendClient $ Log $ encode msg
                 putStrLn $ "Unhandled server event: " ++ show evt
         return ()
 
@@ -114,22 +119,6 @@ handleConnect (Connect server port nick) = do
                 putStrLn $ "Unhandled client event: " ++ show evt
         WS.sendTextData $ T.pack $ show evt
 handleConnect _ = error "Connect first!"
-
-handleServerEvent :: WS.TextProtocol p => WS.Sink p -> [IRC.IrcEvent]
-handleServerEvent sink =
-    [ IRC.Privmsg $ \_ msg -> maybe (return ()) sendEvent $
-        Privmsg <$> IRC.mOrigin msg <*> IRC.mNick msg <*> pure (IRC.mMsg msg)
-    , IRC.Numeric $ \_ msg -> (print msg) >> case IRC.mCode msg of
-        -- Topic
-        "332" -> maybe (return ()) sendEvent $
-            Topic <$> IRC.mChan msg <*> pure (IRC.mMsg msg)
-        _     -> return ()
-    , IRC.Notice pipe
-    , IRC.RawMsg pipe
-    ]
-  where
-    pipe _ msg = WS.sendSink sink $ WS.textData $ IRC.mRaw msg
-    sendEvent  = WS.sendSink sink . WS.textData . A.encode
 
 receiveClientEvent :: WS.TextProtocol p => WS.WebSockets p Event
 receiveClientEvent = do
