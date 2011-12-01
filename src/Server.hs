@@ -30,6 +30,7 @@ data Event
     | Privmsg ByteString ByteString ByteString
     | Topic   ByteString ByteString
     | Names   ByteString [Name]
+    | Ready
     deriving (Show)
 
 instance FromJSON Event where
@@ -40,6 +41,7 @@ instance FromJSON Event where
         "privmsg" -> Privmsg <$> o .: "channel" <*> o .: "nick" <*> o .: "text"
         "topic"   -> Topic   <$> o .: "channel" <*> o .: "text"
         "names"   -> Names   <$> o .: "channel" <*> o .: "names"
+        "ready"   -> pure Ready
         _         -> mzero
     parseJSON _          = mzero
 
@@ -51,6 +53,7 @@ instance ToJSON Event where
         Privmsg c n t -> ["channel" .= c, "nick" .= n, "text" .= t]
         Topic   c t   -> ["channel" .= c, "text" .= t]
         Names   c n   -> ["channel" .= c, "names" .= n]
+        Ready         -> []
       where
         obj = A.object . ("type" .= eventType e :)
 
@@ -61,6 +64,7 @@ eventType (Join _ _)      = "join"
 eventType (Privmsg _ _ _) = "privmsg"
 eventType (Topic _ _)     = "topic"
 eventType (Names _ _)     = "names"
+eventType Ready           = "ready"
 
 data Name = Name ByteString ByteString
     deriving (Show)
@@ -112,6 +116,8 @@ handleConnect (Connect server port nick) = do
                 sendClient $ Topic c t
             Message _ "353" (_ : "=" : c : args)  ->
                 sendClient $ Names c $ map parseName $ BC.words $ last args
+            Message _ "376" _ ->
+                sendClient Ready
             msg -> do
                 sendClient $ Log $ encode msg
                 putStrLn $ "Unhandled server event: " ++ show evt

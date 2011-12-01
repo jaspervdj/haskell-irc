@@ -115,7 +115,7 @@ makeHandlers = (tabManager, nick) ->
         tabManager.getChannelTab(event.nick)
       else
         tabManager.getChannelTab(channel)
-    tab.appendMessage(event.nick + ': ' + event.text)
+    tab.appendMessage("#{event.nick}: #{event.text}", event.time)
 
   join: (event) ->
     # We joined a channel, open a new tab
@@ -130,6 +130,9 @@ makeHandlers = (tabManager, nick) ->
   names: (event) ->
     tab = tabManager.getChannelTab(event.channel)
     tab.addNames(event.names)
+
+  ready: (event) ->
+    $('#join-submit').removeAttr('disabled')
 
 connect = (server, port, nick) ->
   ws = createWebSocket('/chat')
