@@ -53,22 +53,23 @@ class Tab
     @button.addClass('alert') if(!@active)
 
   getChannel: () ->
-    channel
+    @channel
 
   setTitle: (text) ->
     @title.text(text)
 
   refreshNames: () ->
+    tab = this
     @names.html('')
 
     for name in @namesList
       do (name) ->
         div = $(document.createElement('div')).text(name)
         div.click(() ->
-          nameTab = tabManager.getChannelTab(name)
-          @tabManager.showTab(nameTab)
+          nameTab = tab.tabManager.getChannelTab(name)
+          tab.tabManager.showTab(nameTab)
         )
-        @names.append(div)
+        tab.names.append(div)
 
   addNames: (names) ->
     @namesList.push(name) for name in names
