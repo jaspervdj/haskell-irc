@@ -16,6 +16,10 @@ div#sidebar {
     padding: 6px;
 }
 
+div#sidebar #join-channel {
+    width: 100px;
+}
+
 div#tab-names div.names {
     margin: 10px;
     background-color: white;
@@ -28,6 +32,7 @@ div#tab-names div.names div {
 div#tab-titles div {
     padding: 6px;
     font-weight: bold;
+    border-bottom: 1px solid #444;
 }
 
 div#tab-panels {
