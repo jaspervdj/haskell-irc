@@ -5,6 +5,7 @@ import Control.Monad.Trans (liftIO)
 import Control.Applicative ((<$>))
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Concurrent.MVar (MVar, modifyMVar_, newMVar, readMVar)
+import Control.Exception (fromException)
 
 import Data.Aeson (ToJSON (..))
 import Data.Aeson.Parser (json)
@@ -42,9 +43,14 @@ handleServer mvar = forever $ do
     sendClient   = sendClientEvent mvar
     sendServer c = sendServerMessage mvar . makeMessage c
 
-    -- Handle events sent by the client
+-- | Disconnect a client
+disconnectClient :: MVar Session -> IO ()
+disconnectClient mvar = modifyMVar_ mvar $ \session ->
+    return $ session {sessionClient = ClientDisconnected []}
+
+-- Handle events sent by the client
 handleClient :: WS.TextProtocol p => MVar Session -> WS.WebSockets p ()
-handleClient mvar = forever $ do
+handleClient mvar = flip WS.catchWsError disconnect $ forever $ do
     evt <- receiveClientEvent
     case evt of
         Join c _      -> liftIO $ do
@@ -58,6 +64,12 @@ handleClient mvar = forever $ do
   where
     sendClient   = sendClientEvent mvar
     sendServer c = sendServerMessage mvar . makeMessage c
+
+    disconnect exc = case fromException exc of
+        Just WS.ConnectionClosed -> liftIO $ do
+            disconnectClient mvar
+            putStrLn "Client cleanly disconnected."
+        _                        -> return ()
 
 sendClientEvent :: MVar Session -> Event -> IO ()
 sendClientEvent mvar event = modifyMVar_ mvar $ \session -> do
@@ -88,7 +100,7 @@ handleConnect sessions (Connect user) = do
             -- Update old session
             modifyMVar_ mvar $ \session -> do
                 case sessionClient session of
-                    ClientDisconnected msgs -> mapM_ sender msgs
+                    ClientDisconnected msgs -> mapM_ sender $ reverse msgs
                     _                       -> return ()
                 return session {sessionClient = client}
             return mvar
