@@ -23,6 +23,8 @@ div#sidebar #join-channel {
 div#tab-names div.names {
     margin: 10px;
     background-color: white;
+    overflow: auto;
+    height: 400px;
 }
 
 div#tab-names div.names div {

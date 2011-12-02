@@ -1,11 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
-import Data.Char (toUpper)
-import Control.Monad (forever)
-import Control.Monad.Trans (liftIO)
 import Control.Applicative ((<$>))
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Concurrent.MVar (MVar, modifyMVar_, newMVar, readMVar)
 import Control.Exception (fromException)
+import Control.Monad (forever)
+import Control.Monad.Trans (liftIO)
+import Data.Char (toUpper)
+import Data.Maybe (catMaybes)
 
 import Data.Aeson (ToJSON (..))
 import Data.Aeson.Parser (json)
@@ -32,8 +33,9 @@ handleServer mvar = forever $ do
             sendServer "PONG" x
         Message _ "332" [_, c, t] ->
             sendClient $ Topic c t
-        Message _ "353" (_ : "=" : c : args)  ->
-            sendClient $ Names c $ map parseName $ BC.words $ last args
+        Message _ "353" (_ : _ : c : args)  ->
+            sendClient $ Names c $ catMaybes $ map parseName $
+                BC.words $ last args
         Message _ "376" _ ->
             sendClient Ready
         msg -> do

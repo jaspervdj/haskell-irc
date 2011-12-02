@@ -72,10 +72,13 @@ instance FromJSON Name where
 instance ToJSON Name where
     toJSON (Name p n) = A.object ["prefix" .= p, "nick" .= n]
 
-parseName :: ByteString -> Name
+parseName :: ByteString -> Maybe Name
 parseName bs = case BC.uncons bs of
-    Just ('@', n) -> Name "@" n
-    _             -> Name "" bs
+    Nothing       -> Nothing
+    Just (_,  "") -> Nothing
+    Just ('#', _) -> Nothing
+    Just ('@', n) -> Just $ Name "@" n
+    _             -> Just $ Name "" bs
 
 addTime :: A.Value -> IO A.Value
 addTime (A.Object o) = do
