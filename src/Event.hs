@@ -17,7 +17,7 @@ import qualified Data.Aeson as A
 import qualified Data.ByteString.Char8 as BC
 import qualified Data.Map as M
 
-import Session
+import User
 
 data Event
     = Log     ByteString
@@ -80,9 +80,10 @@ parseName bs = case BC.uncons bs of
     Just ('@', n) -> Just $ Name "@" n
     _             -> Just $ Name "" bs
 
-addTime :: A.Value -> IO A.Value
+addTime :: A.Value -> IO (A.Value, Double)
 addTime (A.Object o) = do
     str <- formatTime defaultTimeLocale "%s" <$> getCurrentTime
     let time = read str :: Integer
-    return $ A.Object $ M.insert "time" (A.Number $ fromIntegral time) o
-addTime x            = return x
+        obj  = A.Object $ M.insert "time" (A.Number $ fromIntegral time) o
+    return (obj, fromIntegral time)
+addTime x            = return (x, 0)
