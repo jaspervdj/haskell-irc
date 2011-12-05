@@ -20,36 +20,40 @@ import qualified Data.Map as M
 import User
 
 data Event
-    = Log     ByteString
-    | Connect User
-    | Join    ByteString ByteString
-    | Privmsg ByteString ByteString ByteString
-    | Topic   ByteString ByteString
-    | Names   ByteString [Name]
+    = Log        ByteString
+    | Connect    User
+    | Join       ByteString ByteString
+    | Privmsg    ByteString ByteString ByteString
+    | Topic      ByteString ByteString
+    | Names      ByteString [Name]
     | Ready
+    | Disconnect
     deriving (Show)
 
 instance FromJSON Event where
     parseJSON (A.Object o) = o .: "type" >>= \typ -> case (typ :: Text) of
-        "log"     -> Log     <$> o .: "text"
-        "connect" -> Connect <$> o .: "user"
-        "join"    -> Join    <$> o .: "channel" <*> o .: "nick"
-        "privmsg" -> Privmsg <$> o .: "channel" <*> o .: "nick" <*> o .: "text"
-        "topic"   -> Topic   <$> o .: "channel" <*> o .: "text"
-        "names"   -> Names   <$> o .: "channel" <*> o .: "names"
-        "ready"   -> pure Ready
-        _         -> mzero
+        "log"        -> Log        <$> o .: "text"
+        "connect"    -> Connect    <$> o .: "user"
+        "join"       -> Join    <$> o .: "channel" <*> o .: "nick"
+        "privmsg"    ->
+            Privmsg <$> o .: "channel" <*> o .: "nick" <*> o .: "text"
+        "topic"      -> Topic      <$> o .: "channel" <*> o .: "text"
+        "names"      -> Names      <$> o .: "channel" <*> o .: "names"
+        "ready"      -> pure Ready
+        "disconnect" -> pure Disconnect
+        _            -> mzero
     parseJSON _          = mzero
 
 instance ToJSON Event where
     toJSON e = obj $ case e of
-        Log     t     -> ["text" .= t]
-        Connect u     -> ["user" .= u]
-        Join    c n   -> ["channel" .= c, "nick" .= n]
-        Privmsg c n t -> ["channel" .= c, "nick" .= n, "text" .= t]
-        Topic   c t   -> ["channel" .= c, "text" .= t]
-        Names   c n   -> ["channel" .= c, "names" .= n]
-        Ready         -> []
+        Log        t     -> ["text" .= t]
+        Connect    u     -> ["user" .= u]
+        Join       c n   -> ["channel" .= c, "nick" .= n]
+        Privmsg    c n t -> ["channel" .= c, "nick" .= n, "text" .= t]
+        Topic      c t   -> ["channel" .= c, "text" .= t]
+        Names      c n   -> ["channel" .= c, "names" .= n]
+        Ready            -> []
+        Disconnect       -> []
       where
         obj = A.object . ("type" .= eventType e :)
 
@@ -61,6 +65,7 @@ eventType (Privmsg _ _ _) = "privmsg"
 eventType (Topic _ _)     = "topic"
 eventType (Names _ _)     = "names"
 eventType Ready           = "ready"
+eventType Disconnect      = "disconnect"
 
 data Name = Name ByteString ByteString
     deriving (Show)

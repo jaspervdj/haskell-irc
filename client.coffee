@@ -144,6 +144,13 @@ connect = (server, port, nick) ->
   serverTab = tabManager.getServerTab()
   tabManager.showTab(serverTab)
 
+  user = {
+    "server": server,
+    "port": port,
+    "nick": nick,
+    "password": "herp"
+  }
+
   ws.onmessage = (event) ->
     json = null
     try
@@ -160,15 +167,12 @@ connect = (server, port, nick) ->
       serverTab.appendMessage('[No JSON] ' + event.data)
 
   ws.onopen = () ->
-    ws.send(JSON.stringify({
-      "type": "connect",
-      "user": {
-        "server": server,
-        "port": port,
-        "nick": nick,
-        "password": "herp"
-      }
-    }))
+    ws.send(JSON.stringify({"type": "connect", "user": user}))
+
+    $('#disconnect-form').submit(() ->
+      ws.send(JSON.stringify({"type": "disconnect"}))
+      false
+    )
 
     $('#join-form').submit(() ->
       channel = $('#join-channel').val()

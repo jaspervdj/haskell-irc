@@ -6,6 +6,7 @@ module Session
     , newSessionStore
     , getSession
     , putSession
+    , deleteSession
     ) where
 
 import Control.Applicative ((<$>))
@@ -38,3 +39,6 @@ getSession u (SessionStore m) = M.lookup u <$> readMVar m
 
 putSession :: User -> MVar Session -> SessionStore -> IO ()
 putSession u s (SessionStore m) = modifyMVar_ m $ return . M.insert u s
+
+deleteSession :: User -> SessionStore -> IO ()
+deleteSession u (SessionStore m) = modifyMVar_ m $ return . M.delete u

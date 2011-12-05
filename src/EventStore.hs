@@ -4,6 +4,7 @@ module EventStore
     , newEventStore
     , putEvent
     , getEvents
+    , deleteEvents
     ) where
 
 import Control.Applicative ((<$>))
@@ -36,3 +37,8 @@ getEvents user (EventStore r) = do
     catMaybes <$> mapM R.fromRBulk replies
   where
     key = makeKey user
+
+deleteEvents :: User -> EventStore -> IO ()
+deleteEvents user (EventStore r) = do
+    _ <- R.del r (makeKey user)
+    return ()

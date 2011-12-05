@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 import Control.Applicative ((<$>))
-import Control.Concurrent (forkIO, threadDelay)
+import Control.Concurrent (ThreadId, forkIO, killThread, threadDelay)
 import Control.Concurrent.MVar (MVar, modifyMVar_, newMVar, readMVar)
 import Control.Exception (fromException)
 import Control.Monad (forever)
@@ -54,21 +54,35 @@ disconnectClient mvar = modifyMVar_ mvar $ \session ->
 
 -- Handle events sent by the client
 handleClient :: WS.TextProtocol p
-             => MVar Session -> EventStore -> WS.WebSockets p ()
-handleClient mvar eventStore = flip WS.catchWsError disconnect $ forever $ do
-    evt <- receiveClientEvent
-    case evt of
-        Join c _      -> liftIO $ do
-            sendServer "JOIN" [c]
-            sendClient evt
-        Privmsg c _ t -> liftIO $ do
-            sendServer "PRIVMSG" [c, t]
-            sendClient evt
-        _             -> liftIO $
-            putStrLn $ "Unhandled client event: " ++ show evt
+             => SessionStore -> EventStore
+             -> MVar Session -> ThreadId -> WS.WebSockets p ()
+handleClient sessionStore eventStore mvar serverThreadId =
+    WS.catchWsError handle disconnect
   where
-    sendClient   = sendClientEvent mvar eventStore
-    sendServer c = sendServerMessage mvar . makeMessage c
+    sendClient   = liftIO . sendClientEvent mvar eventStore
+    sendServer c = liftIO . sendServerMessage mvar . makeMessage c
+
+    handle = do
+        evt <- receiveClientEvent
+        case evt of
+            Disconnect    -> liftIO $ do
+                sendServer "QUIT" ["haskell-irc-0.0.0.1"]
+                user <- sessionUser <$> readMVar mvar
+                deleteSession user sessionStore
+                deleteEvents user eventStore
+                killThread serverThreadId
+                putStrLn "Client disconnect, server thread killed"
+            Join c _      -> do
+                sendServer "JOIN" [c]
+                sendClient evt
+                handle
+            Privmsg c _ t -> do
+                sendServer "PRIVMSG" [c, t]
+                sendClient evt
+                handle
+            _             -> do
+                liftIO $ putStrLn $ "Unhandled client event: " ++ show evt
+                handle
 
     disconnect exc = case fromException exc of
         Just WS.ConnectionClosed -> liftIO $ do
@@ -124,8 +138,8 @@ handleConnect sessionStore eventStore (Connect user) = do
             return mvar
 
     -- Continue!
-    _ <- liftIO $ forkIO $ handleServer mvar eventStore
-    handleClient mvar eventStore
+    serverThreadId <- liftIO $ forkIO $ handleServer mvar eventStore
+    handleClient sessionStore eventStore mvar serverThreadId
 handleConnect _ _ _ = error "Connect first!"
 
 receiveClientEvent :: WS.TextProtocol p => WS.WebSockets p Event
