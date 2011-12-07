@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module EventStore
     ( EventStore
-    , newEventStore
+    , withEventStore
     , putEvent
     , getEvents
     , deleteEvents
@@ -20,8 +20,12 @@ import User
 
 newtype EventStore = EventStore R.Redis
 
-newEventStore :: IO EventStore
-newEventStore = EventStore <$> R.connect "127.0.0.1" R.defaultPort
+withEventStore :: (EventStore -> IO a) -> IO a
+withEventStore f = do
+    r <- R.connect "127.0.0.1" R.defaultPort
+    x <- f $ EventStore r
+    R.disconnect r
+    return x
 
 makeKey :: User -> ByteString
 makeKey (User s p n pw) = mconcat [s, "/", BC.pack (show p), "/", n, "/", pw]
