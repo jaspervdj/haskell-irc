@@ -161,4 +161,4 @@ main :: IO ()
 main = do
     sessionStore <- newSessionStore
     eventStore <- newEventStore
-    WS.runServer "0.0.0.0" 8282 $ app sessionStore eventStore
+    WS.runServer "0.0.0.0" 8001 $ app sessionStore eventStore

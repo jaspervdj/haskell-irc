@@ -1,7 +1,7 @@
 createWebSocket = (path) ->
   host = window.location.hostname
   host = 'localhost' if(host == '')
-  uri = 'ws://' + host + ':8282' + path
+  uri = 'ws://' + host + ':8001' + path
 
   if window.MozWebSocket
     new MozWebSocket(uri)
