@@ -171,6 +171,7 @@ connect = (server, port, nick) ->
 
     $('#disconnect-form').submit(() ->
       ws.send(JSON.stringify({"type": "disconnect"}))
+      location.reload(true)
       false
     )
 
