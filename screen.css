@@ -63,3 +63,9 @@ div#tab-buttons div.alert {
 form#send-form {
     padding: 6px;
 }
+
+div#errors {
+    padding: 6px;
+    font-weight: bold;
+    color: #d00;
+}

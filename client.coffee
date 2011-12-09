@@ -8,6 +8,9 @@ createWebSocket = (path) ->
   else
     new WebSocket(uri)
 
+error = (error) ->
+  $('#errors').text(error)
+
 class Tab
   constructor: (@tabManager, @name, @channel) ->
     @tab = tab = this
@@ -103,6 +106,10 @@ class TabManager
       @channelTabs[channel] = new Tab(@tabManager, channel, channel)
     @channelTabs[channel]
 
+disconnect = (ws) ->
+  ws.send(JSON.stringify({"type": "disconnect"}))
+  location.reload(true)
+
 makeHandlers = (tabManager, nick) ->
   log: (event) ->
     tab = tabManager.getServerTab()
@@ -134,6 +141,17 @@ makeHandlers = (tabManager, nick) ->
   ready: (event) ->
     $('#join-submit').removeAttr('disabled')
 
+makeCommands = (tabManager, nick, ws) ->
+  quit: (msg) ->
+    disconnect(ws)
+
+  join: (msg) ->
+    ws.send(JSON.stringify({
+      'type': 'join',
+      'channel': msg,
+      'nick': nick
+    }))
+
 connect = (server, port, nick) ->
   ws = createWebSocket('/chat')
   $('#connect').hide()
@@ -141,6 +159,7 @@ connect = (server, port, nick) ->
 
   tabManager = new TabManager()
   handlers = makeHandlers(tabManager, nick)
+  commands = makeCommands(tabManager, nick, ws)
   serverTab = tabManager.getServerTab()
   tabManager.showTab(serverTab)
 
@@ -169,11 +188,7 @@ connect = (server, port, nick) ->
   ws.onopen = () ->
     ws.send(JSON.stringify({"type": "connect", "user": user}))
 
-    $('#disconnect-form').submit(() ->
-      ws.send(JSON.stringify({"type": "disconnect"}))
-      location.reload(true)
-      false
-    )
+    $('#disconnect-form').submit(() -> disconnect(ws))
 
     $('#join-form').submit(() ->
       channel = $('#join-channel').val()
@@ -188,18 +203,30 @@ connect = (server, port, nick) ->
     $('#send-form').submit(() ->
       channel = tabManager.getActiveTab().getChannel()
       text = $('#send-text').val()
-      if channel
-        ws.send(JSON.stringify({
-          "type": "privmsg",
-          "channel": channel,
-          "nick": nick,
-          "text": text
-        }))
-        $('#send-text').val('')
+
+      if matches = text.match(/^\/\w+/)
+        cmd = matches[0].substr(1)
+        argument = text.substr(2 + cmd.length)
+        if commands[cmd]
+          commands[cmd](argument)
+        else
+          error("Unknown command #{cmd}")
+
+      else
+        if channel
+          ws.send(JSON.stringify({
+            "type": "privmsg",
+            "channel": channel,
+            "nick": nick,
+            "text": text
+          }))
+
+      $('#send-text').val('')
       false
     )
 
 $(document).ready(() ->
+  error('Some dummy error')
   $('#connect-form').submit(() ->
     try
       server = $('#connect-server').val()
